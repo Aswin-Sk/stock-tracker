@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import Plot from 'react-plotly.js';
+
+
 const Profiles = () => {
   console.log("Logging from Profiles component"); 
-  
- 
   const [profiles, setProfiles] = useState([]);
   const [tickers, setTickers] = useState([]);
   const fetchProfiles = async () => {
@@ -107,7 +108,25 @@ const Profiles = () => {
       alert('Error updating ticker. Please try again.');
     }
   };
-
+  const parsePlotData = (plotData) => {
+    try {
+      if (!plotData) {
+        return null; // or return a fallback value
+      }
+      const parsedData = JSON.parse(plotData);
+      if (parsedData && typeof parsedData === 'object' && 'data' in parsedData && 'layout' in parsedData) {
+        console.log('Parsed plot data:', parsedData); // Log the parsed data
+        return parsedData;
+      } else {
+        console.error('Invalid plot data format. Expected an object with "data" and "layout" properties.');
+      }
+    } catch (error) {
+      console.error('Error parsing plot data:', error);
+    }
+    return null; // or return a fallback value
+  };
+  
+  
   const generateUniqueId = () => {
     if (profiles.length === 0) {
       return 1;
@@ -140,6 +159,19 @@ const Profiles = () => {
                   </option>
                 ))}
               </select>
+            )}
+            {/* Render the Plotly graph */}
+            {profile.data.plot && (
+              <>
+                {parsePlotData(profile.data.plot) ? (
+                  <Plot
+                    data={parsePlotData(profile.data.plot).data}
+                    layout={{ width: 1500, height: 500 }}
+                  />
+                ) : (
+                  <p>Error: Invalid plot data</p>
+                )}
+              </>
             )}
             <button onClick={() => deleteProfile(profile.id)}>Delete</button>
           </div>
