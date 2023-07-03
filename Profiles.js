@@ -15,21 +15,7 @@ const Profiles = () => {
 
   // Fetch tickers on component mount
   useEffect(() => {
-    fetchTickers();
-  }, []);
-
-  // Fetch profiles from API
-  const fetchProfiles = async () => {
-    try {
-      const response = await axios.get('http://localhost:8080/profile');
-      setProfiles(response.data);
-    } catch (error) {
-      console.error(error);
-      alert('Cannot fetch profiles');
-    }
-  };
-
-  // Parse ticker symbols from AlphaVantage response
+      // Parse ticker symbols from AlphaVantage response
   const parseTickerSymbols = (data) => {
     const tickerSymbols = [];
     const rows = data.split('\n');
@@ -58,6 +44,21 @@ const Profiles = () => {
       alert('Cannot fetch tickers');
     }
   };
+
+    fetchTickers();
+  }, []);
+
+  // Fetch profiles from API
+  const fetchProfiles = async () => {
+    try {
+      const response = await axios.get('http://localhost:8080/profile');
+      setProfiles(response.data);
+    } catch (error) {
+      console.error(error);
+      alert('Cannot fetch profiles');
+    }
+  };
+
 
   // Create a new profile
   const createProfile = async () => {
