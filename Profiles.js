@@ -6,17 +6,18 @@ const Profiles = () => {
   console.log("Logging from Profiles component");
   const [profiles, setProfiles] = useState([]);
   const [tickers, setTickers] = useState([]);
-  const [loading, setLoading] = useState(false); // New state for loading indicator
 
   // Fetch profiles on component mount
   useEffect(() => {
     fetchProfiles();
   }, []);
-
+  useEffect(() => {
+    localStorage.setItem('tickers', JSON.stringify(tickers));
+  }, [tickers]);
   // Fetch tickers on component mount
   useEffect(() => {
       // Parse ticker symbols from AlphaVantage response
-  const parseTickerSymbols = (data) => {
+  const parseTickerSymbols = async(data) => {
     const tickerSymbols = [];
     const rows = data.split('\n');
     const headers = rows[0].split(',');
@@ -37,7 +38,13 @@ const Profiles = () => {
       const response = await axios.get(
         'https://www.alphavantage.co/query?function=LISTING_STATUS&state=active&apikey=47N9UD8M7YMFVEO1'
       );
-      const tickerSymbols = parseTickerSymbols(response.data);
+      if(typeof(response.data)!='string'){
+        alert('Aplha Vantage not responding please wait');
+        return;
+      }
+      else
+        console.log(typeof(response.data))
+      const tickerSymbols = await parseTickerSymbols(response.data);
       setTickers(tickerSymbols);
     } catch (error) {
       console.error(error);
@@ -45,19 +52,45 @@ const Profiles = () => {
     }
   };
 
-    fetchTickers();
+  const cachedTickers = localStorage.getItem('tickers');
+  if (cachedTickers) {
+    const parsedTickers = JSON.parse(cachedTickers);
+    if (parsedTickers.length === 0) {
+        fetchTickers();
+    } else {
+      setTickers(parsedTickers);
+    }
+  } 
+  else {
+    	fetchTickers();
+  }
+
   }, []);
 
   // Fetch profiles from API
   const fetchProfiles = async () => {
     try {
       const response = await axios.get('http://localhost:8080/profile');
-      setProfiles(response.data);
+      if (response.data ) {
+        const updatedProfiles = response.data.map((profile) => ({
+          ...profile,
+          data: {
+            ...profile.data,
+            isAIPlotVisible: profile.data.isAIPlotVisible !== undefined ? profile.data.isAIPlotVisible : false,
+            isLoading: profile.isLoading!==undefined?profile.isLoading:false,
+          },
+        }));
+        setProfiles(updatedProfiles);
+      } 
+      else {
+        setProfiles([]);
+      }
     } catch (error) {
       console.error(error);
       alert('Cannot fetch profiles');
     }
   };
+  
 
 
   // Create a new profile
@@ -116,6 +149,7 @@ const Profiles = () => {
       profileToUpdate.data.ticker = ticker;
       profileToUpdate.data.plot = response.data.plot;
       profileToUpdate.data.risk_output = response.data.risk_output;
+      profileToUpdate.data.isAIPlotVisible=false;
       await axios.put(`http://localhost:8080/profile`, profileToUpdate);
       await fetchProfiles();
     } catch (error) {
@@ -128,19 +162,19 @@ const Profiles = () => {
   const parsePlotData = (plotData) => {
     try {
       if (!plotData) {
-        return null; // or return a fallback value
+        return null;
       }
       const parsedData = JSON.parse(plotData);
       if (parsedData && typeof parsedData === 'object' && 'data' in parsedData && 'layout' in parsedData) {
-        console.log('Parsed plot data:', parsedData); // Log the parsed data
-        return parsedData;
+        //console.log('Parsed plot data:', parsedData);
+        return parsedData.data;
       } else {
         console.error('Invalid plot data format. Expected an object with "data" and "layout" properties.');
       }
     } catch (error) {
       console.error('Error parsing plot data:', error);
     }
-    return null; // or return a fallback value
+    return null; 
   };
 
   // Generate a unique ID for new profiles
@@ -154,9 +188,13 @@ const Profiles = () => {
   };
 
   // Call Python API with predict set to true
-  const predictAndPlot = async (id) => {
+  const predictAndPlot = async (id,data) => {
     try {
-      setLoading(true);
+      setProfiles((prevProfiles) =>
+      prevProfiles.map((profile) =>
+        profile.id === id ? { ...profile, isLoading: true } : profile
+      )
+      );
       const profileToUpdate = profiles.find((profile) => profile.id === id);
       const request = {
         company_name: profileToUpdate.data.ticker,
@@ -164,37 +202,97 @@ const Profiles = () => {
       };
 
       const response = await callPythonAPI(request);
-      profileToUpdate.data.plot = response.data.plot;
+      profileToUpdate.data =data;
+      profileToUpdate.data.predictive_plot=response.data.plot;
       profileToUpdate.data.risk_output = response.data.risk_output;
+      profileToUpdate.data.isAIPlotVisible=true;
       await axios.put(`http://localhost:8080/profile`, profileToUpdate);
       await fetchProfiles();
-      setLoading(false);
+      setProfiles((prevProfiles) =>
+      prevProfiles.map((profile) =>
+        profile.id === id ? { ...profile, isLoading: false } : profile
+      )
+    );
     } catch (error) {
       console.error(error);
-      setLoading(false);
+      setProfiles((prevProfiles) =>
+      prevProfiles.map((profile) =>
+        profile.id === id ? { ...profile, isLoading: false } : profile
+      )
+    );
       alert('Error predicting and plotting. Please try again.');
     }
   };
-
-  return (
-    <div>
-      <h2>Profiles</h2>
-      <button onClick={createProfile}>Create Profile</button>
-      {profiles.length > 0 ? (
-        profiles.map((profile) => (
-          <div key={profile.id}>
-            <p>ID: {profile.id}</p>
-            {/* Display other profile properties */}
-            {profile.data.ticker ? (
-              <>
-                <p>Ticker: {profile.data.ticker}</p>
-                {loading ? (
-                  <p>Generating plot...</p>
-                ) : (
-                  <button onClick={() => predictAndPlot(profile.id)}>Predict using AI</button>
-                )}
-              </>
-            ) : (
+// Toggle AI plot visibility for a profile
+const toggleAIPlotVisibility = (id) => {
+  setProfiles((prevProfiles) =>
+    prevProfiles.map((profile) =>
+      profile.id === id ? { ...profile, isAIPlotVisible: !profile.isAIPlotVisible } : profile
+    )
+  );
+};
+const getColorCode = (risk) => {
+  if (risk === 'high') {
+    return 'red';
+  } else if (risk === 'moderate') {
+    return 'orange';
+  } else if (risk === 'low') {
+    return 'green';
+  } else {
+    return 'black';
+  }
+};
+return (
+  <div>
+    <h2>Profiles</h2>
+    <button onClick={createProfile}>Create Profile</button>
+    {profiles.length > 0 ? (
+      profiles.map((profile) => (
+        <div key={profile.id}>
+          <p>ID: {profile.id}</p>
+          {/* Display other profile properties */}
+          {profile.data.ticker ? (
+            <>
+              <p>Ticker: {profile.data.ticker}</p>
+              {profile.isLoading?(<p>Loading AI plot....</p>):(
+                <>
+                  {/* <button onClick={() => predictAndPlot(profile.id)}>Predict and Plot</button> */}
+                  <button onClick={() => toggleAIPlotVisibility(profile.id)}>
+                    {profile.isAIPlotVisible ? 'Show Original Plot' : 'Show AI Plot'}
+                  </button>
+                  {!profile.isAIPlotVisible && profile.data.plot && (
+                    <Plot data={parsePlotData(profile.data.plot)} layout={{ width: 1500, height: 500 }} />
+                  )}
+                  {profile.isAIPlotVisible && profile.data.predictive_plot && (
+                    <Plot data={parsePlotData(profile.data.predictive_plot)} layout={{ width: 1500, height: 500 }} />
+                  )}
+                  {!profile.data.predictive_plot && profile.isAIPlotVisible && (
+                    <button onClick={() => predictAndPlot(profile.id, profile.data)}>Generate AI plot</button>
+                  )}
+                  <div>
+                    {/* Show risk output values with color codes */}
+                    <p>Risk Output:</p>
+                    <div>
+                      <span style={{ color: getColorCode(profile.data.risk_output.risk_1_month) }}>
+                        Short Term Risk <br/> {profile.data.risk_output.risk_1_month}
+                        <br/>
+                      </span>
+                      <span style={{ color: getColorCode(profile.data.risk_output.risk_6_months) }}>
+                        Medium Term Risk<br/> {profile.data.risk_output.risk_6_months}
+                        <br/>
+                      </span>
+                      <span style={{ color: getColorCode(profile.data.risk_output.risk_24_months) }}>
+                        Long Term Risk<br/> {profile.data.risk_output.risk_24_months}
+                        <br/>
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
+              
+            </>
+          ) : (
+            <div>
               <select
                 value={profile.data.ticker}
                 onChange={(e) => updateTicker(profile.id, e.target.value)}
@@ -206,28 +304,18 @@ const Profiles = () => {
                   </option>
                 ))}
               </select>
-            )}
-            {/* Render the Plotly graph */}
-            {profile.data.plot && (
-              <>
-                {parsePlotData(profile.data.plot) ? (
-                  <Plot
-                    data={parsePlotData(profile.data.plot).data}
-                    layout={{ width: 1500, height: 500 }}
-                  />
-                ) : (
-                  <p>Error: Invalid plot data</p>
-                )}
-              </>
-            )}
-            <button onClick={() => deleteProfile(profile.id)}>Delete</button>
-          </div>
-        ))
-      ) : (
-        <p>No profiles found.</p>
-      )}
-    </div>
-  );
+            </div>
+          )}
+          <button onClick={() => deleteProfile(profile.id)}>Delete</button>
+          <hr />
+        </div>
+      ))
+    ) : (
+      <p>No profiles found.</p>
+    )}
+  </div>
+);
+
 };
 
 export default Profiles;
