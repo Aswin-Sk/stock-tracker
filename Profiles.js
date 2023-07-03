@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Plot from 'react-plotly.js';
+import 'bootstrap/dist/css/bootstrap.css';
 
 const Profiles = () => {
   console.log("Logging from Profiles component");
@@ -80,7 +81,15 @@ const Profiles = () => {
             isLoading: profile.isLoading!==undefined?profile.isLoading:false,
           },
         }));
-        setProfiles(updatedProfiles);
+        const sortedProfiles = updatedProfiles.sort((a, b) => {
+          if (!a.data.ticker && b.data.ticker) {
+            return -1;
+          } else if (a.data.ticker && !b.data.ticker) {
+            return 1;
+          }
+          return 0;
+        });
+        setProfiles(sortedProfiles);
       } 
       else {
         setProfiles([]);
@@ -233,81 +242,96 @@ const toggleAIPlotVisibility = (id) => {
 };
 const getColorCode = (risk) => {
   if (risk === 'high') {
-    return 'red';
+    return 'danger'; // Bootstrap class for red color
   } else if (risk === 'moderate') {
-    return 'orange';
+    return 'warning'; // Bootstrap class for orange color
   } else if (risk === 'low') {
-    return 'green';
+    return 'success'; // Bootstrap class for green color
   } else {
-    return 'black';
+    return ''; // Empty string for default (black) color
   }
 };
+
 return (
-  <div>
-    <h2>Profiles</h2>
-    <button onClick={createProfile}>Create Profile</button>
+  <div className="container">
+    <button onClick={createProfile} className="btn btn-primary create-profile-button">
+      <i className="fas fa-plus"></i> Create Profile
+    </button>
     {profiles.length > 0 ? (
       profiles.map((profile) => (
-        <div key={profile.id}>
-          <p>ID: {profile.id}</p>
-          {/* Display other profile properties */}
-          {profile.data.ticker ? (
-            <>
-              <p>Ticker: {profile.data.ticker}</p>
-              {profile.isLoading?(<p>Loading AI plot....</p>):(
-                <>
-                  {/* <button onClick={() => predictAndPlot(profile.id)}>Predict and Plot</button> */}
-                  <button onClick={() => toggleAIPlotVisibility(profile.id)}>
-                    {profile.isAIPlotVisible ? 'Show Original Plot' : 'Show AI Plot'}
-                  </button>
-                  {!profile.isAIPlotVisible && profile.data.plot && (
-                    <Plot data={parsePlotData(profile.data.plot)} layout={{ width: 1500, height: 500 }} />
-                  )}
-                  {profile.isAIPlotVisible && profile.data.predictive_plot && (
-                    <Plot data={parsePlotData(profile.data.predictive_plot)} layout={{ width: 1500, height: 500 }} />
-                  )}
-                  {!profile.data.predictive_plot && profile.isAIPlotVisible && (
-                    <button onClick={() => predictAndPlot(profile.id, profile.data)}>Generate AI plot</button>
-                  )}
-                  <div>
-                    {/* Show risk output values with color codes */}
-                    <p>Risk Output:</p>
-                    <div>
-                      <span style={{ color: getColorCode(profile.data.risk_output.risk_1_month) }}>
-                        Short Term Risk <br/> {profile.data.risk_output.risk_1_month}
-                        <br/>
-                      </span>
-                      <span style={{ color: getColorCode(profile.data.risk_output.risk_6_months) }}>
-                        Medium Term Risk<br/> {profile.data.risk_output.risk_6_months}
-                        <br/>
-                      </span>
-                      <span style={{ color: getColorCode(profile.data.risk_output.risk_24_months) }}>
-                        Long Term Risk<br/> {profile.data.risk_output.risk_24_months}
-                        <br/>
-                      </span>
+        <div key={profile.id} className="card mb-3">
+          <div className="card-body">
+            {/* Display other profile properties */}
+            {profile.data.ticker ? (
+              <>
+                <div className="card-header">
+                  <h5 className="card-title">Ticker: {profile.data.ticker}</h5>
+                </div>
+                {profile.isLoading ? (
+                  <p className="card-text">Loading AI plot....</p>
+                ) : (
+                  <>
+                    <div className="d-flex justify-content-end mb-3">
+                      <button onClick={() => toggleAIPlotVisibility(profile.id)} className="btn btn-primary">
+                        {profile.isAIPlotVisible ? 'Show Original Plot' : 'Show AI Plot'}
+                      </button>
+                      
                     </div>
-                  </div>
-                </>
-              )}
-              
-            </>
-          ) : (
-            <div>
-              <select
-                value={profile.data.ticker}
-                onChange={(e) => updateTicker(profile.id, e.target.value)}
-              >
-                <option value="">Select a ticker</option>
-                {tickers.map((ticker) => (
-                  <option key={ticker} value={ticker}>
-                    {ticker}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          <button onClick={() => deleteProfile(profile.id)}>Delete</button>
-          <hr />
+                    <div className="d-flex">
+                      <div className="plot">
+                        {!profile.isAIPlotVisible && profile.data.plot && (
+                          <Plot data={parsePlotData(profile.data.plot)} layout={{ width: '1000', plot_bgcolor: 'black', paper_bgcolor: 'black', height: 500, font: { color: 'white' } }} />
+                        )}
+                        {!profile.data.predictive_plot && profile.isAIPlotVisible && (
+                        <button onClick={() => predictAndPlot(profile.id, profile.data)} className={"btn btn-primary"} style={{marginLeft:'455px',marginRight:'455px',marginTop:'220px',marginBottom:'220px'}}>Generate AI plot</button>
+                      )}
+                        {profile.isAIPlotVisible && profile.data.predictive_plot && (
+                          <Plot data={parsePlotData(profile.data.predictive_plot)} layout={{ width: '1000', plot_bgcolor: 'black', paper_bgcolor: 'black', height: 500, font: { color: 'white' } }} />
+                        )}
+                      </div>
+                      <div className="d-flex flex-column align-items-start ml-auto">
+                        {/* Show risk output values with color-coded boxes */}
+                        <div className="card mb-3">
+                          <div className={`card-body bg-${getColorCode(profile.data.risk_output.risk_1_month)}`} style={{ height: '100px', width: '300px' }}>
+                            <h5 className="card-title">Short Term Risk</h5>
+                            <p className="card-text text-light">{profile.data.risk_output.risk_1_month}</p>
+                          </div>
+                        </div>
+                        <div className="card mb-3">
+                          <div className={`card-body bg-${getColorCode(profile.data.risk_output.risk_6_months)}`} style={{ height: '100px', width: '300px' }}>
+                            <h5 className="card-title">Medium Term Risk</h5>
+                            <p className="card-text text-light">{profile.data.risk_output.risk_6_months}</p>
+                          </div>
+                        </div>
+                        <div className="card mb-3">
+                          <div className={`card-body bg-${getColorCode(profile.data.risk_output.risk_24_months)}`} style={{ height: '100px', width: '300px' }}>
+                            <h5 className="card-title">Long Term Risk</h5>
+                            <p className="card-text text-light">{profile.data.risk_output.risk_24_months}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (
+              <div>
+                <select
+                  value={profile.data.ticker}
+                  onChange={(e) => updateTicker(profile.id, e.target.value)}
+                  className="form-select"
+                >
+                  <option value="">Select a ticker</option>
+                  {tickers.map((ticker) => (
+                    <option key={ticker} value={ticker}>
+                      {ticker}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <button onClick={() => deleteProfile(profile.id)} className="btn btn-danger delete-button">Delete</button>
+          </div>
         </div>
       ))
     ) : (
@@ -316,6 +340,6 @@ return (
   </div>
 );
 
-};
+    };
 
 export default Profiles;
